@@ -2,9 +2,20 @@
 
 基于原作者提供的源码重新编译，配套使用本次提供的新版词典。只支持 Windows x64 的 Houdini 21.0.440（Python 3.11、Qt 6.5.3、HDK API 21000440）。不会升级 Houdini，也不会替换 Houdini 安装目录里的任何文件。
 
-## 安装与使用
+## 下载与安装
 
-完全退出 Houdini，解压安装包后运行 `install.bat`。默认安装到 Documents\houdini21.0\packages；设置了 HOUDINI_USER_PREF_DIR 时使用该目录下的 packages，并把 __HVER__ 展开为 21.0。安装器会校验文件哈希，并备份已有的同名包。
+普通用户只需从 GitHub Releases 下载 `HoudiniChineseInstaller-21.0.440.exe`：
+
+1. 保存工作并关闭 Houdini。
+2. 运行安装器，确认自动识别的 Houdini 21.0 `packages` 目录。
+3. 点击“安装”。完成后重新启动 Houdini 21.0.440。
+4. 按 **F3** 或点击顶部 **中/英** 按钮切换显示语言。
+
+安装器不会修改 Houdini 程序目录或工程文件。覆盖安装前会备份已有的同名包；以后可在 Windows“已安装的应用”中卸载，安装器会恢复该备份。安装器尚未进行商业代码签名，Windows 首次运行时可能显示 SmartScreen 提示。
+
+ZIP 包保留给需要离线检查或手动部署的用户。完全退出 Houdini，解压后运行 `install.bat`。默认安装到 Documents\houdini21.0\packages；设置了 HOUDINI_USER_PREF_DIR 时使用该目录下的 packages，并把 __HVER__ 展开为 21.0。脚本会校验文件哈希，并备份已有的同名包。
+
+## 使用
 
 重新启动 Houdini 21.0.440，按 **F3** 或顶部 **中/英** 按钮切换显示语言。右键中/英按钮可调整快捷键。启动通知成功后会输出 `HoudiniChinese 21 overlay ready`。
 
@@ -44,6 +55,6 @@ Box 改为“长方体”；Main 显示为“主要”；Delta Mush 的显示改
 
 ## 源码与构建
 
-在仓库根目录运行 `build21.cmd` 构建，使用 `test21.cmd` 与 `test-native21.cmd` 执行回归检查，最后运行 `python tools/package21.py` 生成发行包。编译依赖 Houdini 21.0.440 SDK、Visual Studio 2022 Build Tools 和 Python。`prepare21.py` 从源码词典读取数据和 Python 文件，并明确排除其他 Houdini 版本的预编译 DLL。
+在仓库根目录运行 `build21.cmd` 构建，使用 `test21.cmd` 与 `test-native21.cmd` 执行回归检查，再运行 `python tools/package21.py` 生成 ZIP 发行包。运行 `build-installer21.cmd` 可使用 Inno Setup 6 生成单文件安装器。编译依赖 Houdini 21.0.440 SDK、Visual Studio 2022 Build Tools、Python 和 Inno Setup 6。`prepare21.py` 从源码词典读取数据和 Python 文件，并明确排除其他 Houdini 版本的预编译 DLL。
 
 源代码沿用原项目 GPL 许可证，Detours 许可证另附。原始压缩包与解出的原作者源码保留，早期自写原型未用于本安装包。

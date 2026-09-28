@@ -35,6 +35,8 @@
 build/
 dist/
 release/HoudiniChinese-21.0.440/
+release/HoudiniChineseInstaller-21.0.440.exe
+release/HoudiniChineseInstaller-21.0.440.sha256.txt
 
 # Regenerable Houdini UI inventories. Reviewed drafts remain tracked separately.
 translations/inventory/
