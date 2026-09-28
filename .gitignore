@@ -1,0 +1,47 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Build intermediates / output
+build/
+dist/
+release/HoudiniChinese-21.0.440/
+
+# Regenerable Houdini UI inventories. Reviewed drafts remain tracked separately.
+translations/inventory/
+
+# Local caches are never part of the Houdini package.
+**/__pycache__/
+*.pyc
+
+# Optional diagnostic log (release builds do not create it).
+hook_trace.log

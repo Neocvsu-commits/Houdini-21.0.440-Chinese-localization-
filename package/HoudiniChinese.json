@@ -1,0 +1,8 @@
+{
+  "enable": "houdini_version == '22.0'",
+  "load_package_once": true,
+  "hpath": "$HOUDINI_PACKAGE_PATH/HoudiniChinese",
+  "preload_libraries": [
+    "$HOUDINI_PACKAGE_PATH/HoudiniChinese/HoudiniChineseHook.dll"
+  ]
+}

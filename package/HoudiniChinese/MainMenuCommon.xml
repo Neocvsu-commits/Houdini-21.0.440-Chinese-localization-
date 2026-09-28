@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Buttons are Qt children after Desktop/Take; no native menu placeholders. -->
+<mainMenu><menuBar/></mainMenu>

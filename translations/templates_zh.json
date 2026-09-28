@@ -1,0 +1,6 @@
+{
+  "$schema": "sp-translation-v1",
+  "id": "houdini-placeholder-templates-zh",
+  "description": "人工审核的动态 UI 占位符模板。禁止放入用户数据、节点名、参数值或路径模板。",
+  "templates": {}
+}
