@@ -621,9 +621,40 @@ QString lookupTranslationUncached(const QString &trimmed) {
     return fallback.modified && !fuzzy.isEmpty() ? fuzzy + QLatin1Char('*') : fuzzy;
 }
 
+// Houdini 会在参数提示末尾附加参数标识，例如
+// "... supported by mantra and VEX. (object:rendervisibility)"。
+// 词典里只存了正文，精确匹配会失败；这里剥掉尾部的 (type:parm) 再查一次。
+QString stripTrailingParmSuffix(const QString &text) {
+    if (!text.endsWith(QLatin1Char(')')))
+        return {};
+    const qsizetype open = text.lastIndexOf(QLatin1Char('('));
+    if (open <= 1)
+        return {};
+    if (!text[open - 1].isSpace())
+        return {};
+    const QString inner = text.mid(open + 1, text.size() - open - 2);
+    if (inner.isEmpty() || inner.size() > 80)
+        return {};
+    for (const QChar ch : inner) {
+        if (!ch.isLetterOrNumber() && ch != QLatin1Char('_') &&
+            ch != QLatin1Char(':') && ch != QLatin1Char('/') &&
+            ch != QLatin1Char('.') && ch != QLatin1Char('-') &&
+            ch != QLatin1Char(' '))
+            return {};
+    }
+    return text.left(open).trimmed();
+}
+
 QString lookupTranslation(const QString &trimmed) {
-    return g_lookupCache.lookup(
+    const QString direct = g_lookupCache.lookup(
         trimmed, [&trimmed] { return lookupTranslationUncached(trimmed); });
+    if (!direct.isEmpty())
+        return direct;
+    const QString stripped = stripTrailingParmSuffix(trimmed);
+    if (stripped.isEmpty() || stripped == trimmed)
+        return {};
+    return g_lookupCache.lookup(
+        stripped, [&stripped] { return lookupTranslationUncached(stripped); });
 }
 
 QList<QPointer<QWindow>> g_nodeInfoWindows;

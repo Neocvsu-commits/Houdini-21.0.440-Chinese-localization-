@@ -39,6 +39,8 @@ Size of the box along the X axis. ← 英文原文保留
 - 未命中的节点保持英文，不会出现半截中文或错行
 - 标题与页脚由引擎钩子翻译（`Camera` → `相机`，`按 F1 查看帮助。`）
 - `Parameter: %s` 头部由引擎补丁替换为 `参数：%s`，切回英文自动恢复
+- Houdini 会在提示末尾附加 `(object:rendervisibility)` 这类参数标识；
+  引擎会剥掉它再查词典，避免因为这几个字符导致整句匹配失败
 - 卸载：`python tools/build_help_overlay21.py --uninstall`，或删除
   `Documents\houdini21.0\help\nodes\`
 
