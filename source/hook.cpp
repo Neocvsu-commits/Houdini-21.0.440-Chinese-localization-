@@ -115,6 +115,7 @@
 #include <utility>
 #include <type_traits>
 #include <unordered_map>
+#include <mutex>
 #include <unordered_set>
 #include <string>
 
@@ -151,6 +152,36 @@ std::unordered_map<uint64_t, size_t> g_dictionaryIndex;
 // translated MOT tooltip that Houdini cached before the language was turned
 // off. Ambiguous translations are deliberately omitted.
 std::unordered_map<std::string, std::string> g_reverseDictionary;
+// 会话级反查缓存：把本次运行翻译过的（显示文本 -> 原文）成对记录下来。
+// 歧义译文（同一句中文来自多个英文原文）无法进入静态反查表，切回英文时就会
+// 残留中文；凡是本会话显示过的文案都能在这里精确还原。
+std::mutex g_sessionReverseMutex;
+std::unordered_map<std::string, std::string> g_sessionReverse;
+
+void recordSessionReverse(const QString &source, const QString &display) {
+    if (source.isEmpty() || display.isEmpty() || source == display)
+        return;
+    const QByteArray sourceBytes = source.toUtf8();
+    const QByteArray displayBytes = display.toUtf8();
+    if (sourceBytes.size() > 4096 || displayBytes.size() > 512)
+        return;
+    std::lock_guard<std::mutex> lock(g_sessionReverseMutex);
+    if (g_sessionReverse.size() > 50000)
+        g_sessionReverse.clear();
+    g_sessionReverse[std::string(displayBytes.constData(),
+                                 static_cast<size_t>(displayBytes.size()))] =
+        std::string(sourceBytes.constData(), static_cast<size_t>(sourceBytes.size()));
+}
+
+QString findSessionReverse(const QByteArray &display) {
+    std::lock_guard<std::mutex> lock(g_sessionReverseMutex);
+    const auto found = g_sessionReverse.find(
+        std::string(display.constData(), static_cast<size_t>(display.size())));
+    if (found == g_sessionReverse.end())
+        return {};
+    return QString::fromUtf8(found->second.data(),
+                             static_cast<qsizetype>(found->second.size()));
+}
 HoudiniChinesePlaceholders::Catalog g_placeholderTemplates;
 HoudiniChineseMatching::Catalog g_matching;
 thread_local HoudiniChineseLookupCache::DirectMapped<> g_lookupCache;
@@ -219,6 +250,9 @@ void rebuildReverseDictionary() {
 
 QString findDictionarySourceExact(const QString &translation) {
     const QByteArray bytes = translation.toUtf8();
+    const QString session = findSessionReverse(bytes);
+    if (!session.isEmpty())
+        return session;
     const auto found = g_reverseDictionary.find(std::string(
         bytes.constData(), static_cast<std::size_t>(bytes.size())));
     if (found == g_reverseDictionary.end())
@@ -411,6 +445,7 @@ void openHotkeyDialog();
 void captureUntranslatedOnce();
 void redrawAllHoudiniWindows();
 void rememberQtWindow(QWindow *window);
+bool setHelpFooterChinese(bool chinese);
 
 bool isSupportedGuiHost() {
     wchar_t path[MAX_PATH] = {};
@@ -690,10 +725,13 @@ QString displayTranslation(const QString &text) {
         : HoudiniChineseHooks::TranslationOutcome::Translated);
     if (translated.isEmpty())
         HoudiniChineseCapture::submit(menuText);
-    return !translationEnabled || translated.isEmpty()
-               ? QString()
-               : HoudiniChineseDisplayText::preserveOuterWhitespace(text,
-                                                                    translated);
+    if (translationEnabled && !translated.isEmpty()) {
+        const QString display =
+            HoudiniChineseDisplayText::preserveOuterWhitespace(text, translated);
+        recordSessionReverse(text, display);
+        return display;
+    }
+    return {};
 }
 
 // Callers that have already proved the text belongs to a display-only Qt
@@ -2805,6 +2843,7 @@ void rebuildActiveHoudiniHelpTip() {
 void toggleLanguage() {
     const bool enabled = !g_enabled.load(std::memory_order_acquire);
     g_enabled.store(enabled, std::memory_order_release);
+    setHelpFooterChinese(enabled);
     updateMenuButtonState();
     rebuildActiveHoudiniHelpTip();
     scheduleLanguageRefresh();
@@ -3654,6 +3693,122 @@ bool installUIHelpTipLookRenderHook() {
         ui, "?render@UI_HelpTipLook@@UEAAXPEAVRE_Render@@HHHHPEAX@Z",
         g_uiHelpTipLookRender, hookedUIHelpTipLookRender);
 }
+
+// 工具提示的标题不走 UI_Text，而是由 UI_HelpTipLook::getTitle 直接返回给绘制层，
+// 所以在取词这一层翻译；返回的缓冲区是 thread_local，生命周期覆盖绘制调用。
+thread_local std::string g_helpTipTitleBuffer;
+
+const char *hookedUIHelpTipGetTitle(void *self) {
+    HC_OBSERVE(hookedUIHelpTipGetTitle);
+    if (!g_uiHelpTipGetTitle)
+        return nullptr;
+    const char *raw = g_uiHelpTipGetTitle(self);
+    if (!raw || !*raw || !g_enabled.load(std::memory_order_acquire))
+        return raw;
+    const QString translated = displayTranslation(QString::fromUtf8(raw));
+    if (translated.isEmpty())
+        return raw;
+    const QByteArray bytes = translated.toUtf8();
+    g_helpTipTitleBuffer.assign(bytes.constData(),
+                                static_cast<size_t>(bytes.size()));
+    return g_helpTipTitleBuffer.c_str();
+}
+
+bool installUIHelpTipTitleHook() {
+    HMODULE ui = GetModuleHandleW(L"libUI.dll");
+    if (!g_uiHelpTipGetTitle)
+        g_uiHelpTipGetTitle = reinterpret_cast<NativeCStringFn>(
+            GetProcAddress(ui, "?getTitle@UI_HelpTipLook@@QEBAPEBDXZ"));
+    if (!g_uiHelpTipGetTitle)
+        return false;
+    const bool installed =
+        attachInlineHook(g_uiHelpTipGetTitle, hookedUIHelpTipGetTitle);
+    hookLog("HelpTipTitleHook: target=%p installed=%d",
+            reinterpret_cast<void *>(g_uiHelpTipGetTitle),
+            installed ? 1 : 0);
+    return installed;
+}
+
+// 工具提示页脚是 "Press %s for more help." 拼出来的（libUI 里只有这一个格式串），
+// 拼完的整句不会再经过任何可钩的取词函数。这里直接把这个唯一的格式串
+// 换成中文；原文 24 字节，中文 22 字节，放得下，切回英文时原样写回。
+namespace {
+constexpr size_t kHelpFooterBytes = 24; // "Press %s for more help." + NUL
+unsigned char *g_helpFooterLiteral = nullptr;
+char g_helpFooterOriginal[kHelpFooterBytes] = {};
+bool g_helpFooterChinese = false;
+
+bool locateHelpFooterLiteral() {
+    if (g_helpFooterLiteral)
+        return true;
+    HMODULE ui = GetModuleHandleW(L"libUI.dll");
+    if (!ui)
+        return false;
+    const auto *base = reinterpret_cast<const unsigned char *>(ui);
+    const auto *dos = reinterpret_cast<const IMAGE_DOS_HEADER *>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+        return false;
+    const auto *nt =
+        reinterpret_cast<const IMAGE_NT_HEADERS *>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE)
+        return false;
+    static const char needle[] = "Press %s for more help.";
+    const auto *section = IMAGE_FIRST_SECTION(nt);
+    const unsigned char *hit = nullptr;
+    size_t found = 0;
+    // 只扫描已初始化的只读数据段：可执行段不会有这个字面量，
+    // 扫描未映射页会直接崩溃。
+    for (WORD index = 0; index < nt->FileHeader.NumberOfSections; ++index) {
+        const DWORD characteristics = section[index].Characteristics;
+        if ((characteristics & IMAGE_SCN_MEM_EXECUTE) ||
+            !(characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA))
+            continue;
+        const unsigned char *begin = base + section[index].VirtualAddress;
+        const size_t length = section[index].Misc.VirtualSize;
+        for (size_t offset = 0; offset + kHelpFooterBytes <= length; ++offset) {
+            if (begin[offset] != 'P' ||
+                std::memcmp(begin + offset, needle, kHelpFooterBytes - 1) != 0)
+                continue;
+            hit = begin + offset;
+            if (++found > 1)
+                return false; // 多个候选就不动，宁可不翻
+        }
+    }
+    if (!hit)
+        return false;
+    g_helpFooterLiteral = const_cast<unsigned char *>(hit);
+    std::memcpy(g_helpFooterOriginal, g_helpFooterLiteral, kHelpFooterBytes);
+    hookLog("HelpFooter: literal at %p", static_cast<const void *>(hit));
+    return true;
+}
+
+} // namespace
+
+bool setHelpFooterChinese(bool chinese) {
+    if (!locateHelpFooterLiteral())
+        return false;
+    if (g_helpFooterChinese == chinese)
+        return true;
+    static const char kChinese[] = "按 %s 查看帮助。";
+    static_assert(sizeof(kChinese) <= kHelpFooterBytes, "footer text too long");
+    DWORD previous = 0;
+    if (!VirtualProtect(g_helpFooterLiteral, kHelpFooterBytes, PAGE_READWRITE,
+                        &previous))
+        return false;
+    if (chinese) {
+        std::memset(g_helpFooterLiteral, 0, kHelpFooterBytes);
+        std::memcpy(g_helpFooterLiteral, kChinese, sizeof(kChinese) - 1);
+    } else {
+        std::memcpy(g_helpFooterLiteral, g_helpFooterOriginal, kHelpFooterBytes);
+    }
+    DWORD ignored = 0;
+    VirtualProtect(g_helpFooterLiteral, kHelpFooterBytes, previous, &ignored);
+    FlushInstructionCache(GetCurrentProcess(), g_helpFooterLiteral,
+                          kHelpFooterBytes);
+    g_helpFooterChinese = chinese;
+    return true;
+}
+
 
 const char *translatedTooltipArgument(const char *source,
                                       NativeTranslatedTextRange &storage) {
@@ -6097,6 +6252,7 @@ void installRuntimeHooks() {
     HC_INSTALL(installStyleItemTextHook);
     HC_INSTALL(installUIHelpFeelGetTextHook);
     HC_INSTALL(installUIHelpTipLookRenderHook);
+    HC_INSTALL(installUIHelpTipTitleHook);
     HC_INSTALL(installBRHelpTooltipHook);
     HC_INSTALL(installMOTTooltipHooks21);
     HC_INSTALL(installFontMeasurementHooks);
@@ -6199,6 +6355,9 @@ void runOnGuiThread(QApplication *app) {
 
     installNativeShortcutEventFilter();
     installRuntimeHooks();
+    // 页脚格式串在 libUI 加载后才能定位；英文模式保持原文。
+    if (g_enabled.load(std::memory_order_acquire))
+        setHelpFooterChinese(true);
     rememberCurrentImportModules();
     g_hookRegistryReady.store(true, std::memory_order_release);
     scheduleExistingQtQuickTextRefresh();

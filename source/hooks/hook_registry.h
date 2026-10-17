@@ -48,6 +48,9 @@
     X(hookedUIHelpTipLookRender, L"libUI.dll", \
       "?render@UI_HelpTipLook@@UEAAXPEAVRE_Render@@HHHHPEAX@Z", \
       "native-help", "context", "inline", "native-tooltip-title-body-footer") \
+    X(hookedUIHelpTipGetTitle, L"libUI.dll", \
+      "?getTitle@UI_HelpTipLook@@QEBAPEBDXZ", \
+      "native-help", "context", "inline", "native-tooltip-title-body-footer") \
     X(hookedUIHelpFeelGetText, L"libUI.dll", \
       HC_UI_HELP_SYMBOL, \
       "native-help", "draw", "inline", "native-parameter-help-text") \
