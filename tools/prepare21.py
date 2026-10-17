@@ -35,7 +35,8 @@ with zipfile.ZipFile('F:/BaiduNetdiskDownload/HoudiniChinese更新了词典.zip'
 for extra in ('dictionary_zz_houdini21_zh.json',
               'dictionary_shelf_help21_zh.json',
               'dictionary_zzz_fixes_zh.json',
-              'dictionary_zzz_coverage_zh.json'):
+              'dictionary_zzz_coverage_zh.json',
+              'dictionary_zzz_imported_zh.json'):
     source = ROOT/'translations'/extra
     if source.exists():
         shutil.copy2(source, PACKAGE/'HoudiniChinese/translations'/extra)

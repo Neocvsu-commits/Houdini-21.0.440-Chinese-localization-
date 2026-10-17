@@ -21,7 +21,8 @@ TRANSLATION_DIRS = (ROOT / "source" / "translations", ROOT / "translations")
 TRANSLATION_EXTRA = ("dictionary_zz_houdini21_zh.json",
                      "dictionary_shelf_help21_zh.json",
                      "dictionary_zzz_fixes_zh.json",
-                   "dictionary_zzz_coverage_zh.json")
+                   "dictionary_zzz_coverage_zh.json",
+                   "dictionary_zzz_imported_zh.json")
 DUMP = ROOT / "build" / "nodes21.json"
 
 DUMP_SCRIPT = """

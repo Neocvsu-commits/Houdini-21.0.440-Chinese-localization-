@@ -25,7 +25,8 @@ EXTRA_DIR = os.path.join(ROOT, "translations")
 EXTRA_FILES = ("dictionary_zz_houdini21_zh.json",
                "dictionary_shelf_help21_zh.json",
                "dictionary_zzz_fixes_zh.json",
-                   "dictionary_zzz_coverage_zh.json")
+                   "dictionary_zzz_coverage_zh.json",
+                   "dictionary_zzz_imported_zh.json")
 DEFAULT_HFS = r"D:\DCC SoftWare\Houdini 21.0.440"
 
 CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")

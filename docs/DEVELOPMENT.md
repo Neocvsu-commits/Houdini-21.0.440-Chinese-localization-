@@ -41,11 +41,28 @@ help 覆盖层所需数据；`build21.cmd` 会自动调用它。
 审计来源：`.ui/.gad`、`python3.11libs`、`config/Help/cache`、`bin/*.dll`（候选池）。
 当前界面文案覆盖率约 **97.6%**，剩余多为截断片段与控件标识符。
 
+## 新增内容的入口
+
+以后要补内容，只改这几处，不用碰 C++：
+
+| 想加什么 | 改哪里 | 怎么生效 |
+|---|---|---|
+| 界面词条 | 新建 `translations/dictionary_zzz_*.json`（`translations` 字段，按文件名最后加载） | 放入用户包 `translations/`，重启 Houdini |
+| 参数提示摘要 | `data/help_summaries_local.json`（英文原文 → 中文摘要，覆盖 Stars401 同名项） | `build_help_overlay21.py --install`，重启 + 清缓存 |
+| 工具提示 | 优先用 `collect-tooltips21.cmd` 导出 → 补译进上面的词条文件 | 重启 Houdini |
+| 节点中文名 / 拼音 | 先补词条，再跑 `build_node_labels21.py` | 覆盖 `python3.11libs/` 两个 JSON，重启 |
+| 术语修订 | `tools/build_fixes21.py` 里的 `REWRITES` / `SEMANTIC` | 重新生成 `zzz_fixes`，重启 |
+
+约定：`translations/dictionary_zzz_*` 永远最后加载，可以安全地覆盖上游词典；
+`data/help_summaries_local.json` 是人工补充入口，`_` 开头的键会被忽略。
+
 ## 覆盖层生成规则
 
-- 只处理「缩进 ≥8 空格 + 大写开头 + 不以冒号结尾」的描述行，避免把参数名当描述
-- 匹配顺序：整句 → 去空白前缀互验 → 首句；数据来自 `data/help_summaries_stars401.json`
-  与本插件词典（仅取 ≤80 字短译文）
+- 只在 `@parameters` 段内处理：缩进 ≥4 空格、大写开头、不以冒号结尾的说明行
+- 匹配顺序：整句 → 去空白后前缀互验 → 首句；数据来自
+  `data/help_summaries_stars401.json`、`data/help_summaries_local.json` 与本插件词典
+  （仅取 ≤80 字短译文）
+- 摘要后补一个空行，使其单独成段
 - 已存在 `【` 的行不重复插入；写出前校验非空且无 `\x00`
 
 ## 测试现状

@@ -84,11 +84,24 @@ class SummaryIndex:
         return ""
 
 
+LOCAL_SUMMARIES = os.path.join(ROOT, "data", "help_summaries_local.json")
+
+
 def load_summaries():
-    if not os.path.exists(SUMMARIES):
-        return {}
-    data = json.load(io.open(SUMMARIES, encoding="utf-8"))
-    return {normalize(k): v.strip() for k, v in data.items() if k and v}
+    """Stars401 的摘要库 + 本地补充（本地优先，忽略 _ 开头的元字段）。"""
+    merged = {}
+    for path in (SUMMARIES, LOCAL_SUMMARIES):
+        if not os.path.exists(path):
+            continue
+        try:
+            data = json.load(io.open(path, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for key, value in data.items():
+            if not key or key.startswith("_") or not isinstance(value, str) or not value.strip():
+                continue
+            merged[normalize(key)] = value.strip()
+    return merged
 
 
 def load_dictionary():

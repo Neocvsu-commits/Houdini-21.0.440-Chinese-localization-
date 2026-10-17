@@ -1,0 +1,6 @@
+{
+  "_comment": "本地补充的参数提示摘要：英文原文 -> 中文摘要。优先级高于 data/help_summaries_stars401.json；改完运行 python tools/build_help_overlay21.py --install 生效。",
+  "_example": {
+    "Creates a plane.": "创建一个平面。"
+  }
+}
