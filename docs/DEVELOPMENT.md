@@ -24,7 +24,31 @@ python tools\package21.py
 ```
 
 `tools/prepare21.py` 从源码词典与 Python 文件生成发行包，并接入拼音搜索模块与
-help 覆盖层所需数据；`build21.cmd` 会自动调用它。
+help 覆盖层所需数据；`build21.cmd` 会自动调用它。上游数据已内置在 `vendor/upstream/`，
+克隆后无需外部更新包即可构建。
+
+## 在另一台机器复刻
+
+前置：**Houdini 21.0.440**（提供 SDK 头文件/库和 `nodes.zip`）、
+**Visual Studio 2022 Build Tools**（C++ 桌面开发）、**Python 3.11+**；
+只有生成安装器时才需要 **Inno Setup 6**。
+
+```bat
+git clone https://github.com/Neocvsu-commits/Houdini-21.0.440-Chinese-localization-.git
+cd Houdini-21.0.440-Chinese-localization-
+set HFS=D:\你的路径\Houdini 21.0.440
+build21.cmd
+:: 完全退出 Houdini 后
+deploy-engine21.cmd
+python tools\build_help_overlay21.py --install --hfs "%HFS%"
+python tools\clear_help_cache21.py
+:: 重新出包（可选）
+python -X utf8 tools\package21.py
+build-installer21.cmd
+```
+
+引擎二进制不在仓库里，必须在本地编译；`HFS` 未设置时 `prepare21.py` 会退回到
+开发机默认路径并报错，请显式指定。
 
 ## 数据流水线
 

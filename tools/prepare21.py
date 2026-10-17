@@ -1,37 +1,71 @@
-"""Stage only data/Python from the supplied update; binaries are rebuilt locally."""
+"""Stage only data/Python from the supplied update; binaries are rebuilt locally.
+
+数据来源优先级：
+    1. 仓库内 vendor/upstream（自包含，克隆即可构建）
+    2. 环境变量 HOUDINI_CHINESE_UPSTREAM_ZIP 指向的更新包
+    3. 默认路径 F:/BaiduNetdiskDownload/HoudiniChinese更新了词典.zip
+
+Houdini 安装目录通过 HFS 环境变量指定，未设置时用默认路径。
+"""
 from pathlib import Path
 import importlib.util
 import json
+import os
 import shutil
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build' / 'houdini21'
 PACKAGE = OUT / 'package'
+UPSTREAM = ROOT / 'vendor' / 'upstream'
+UPSTREAM_ZIP = Path(os.environ.get(
+    'HOUDINI_CHINESE_UPSTREAM_ZIP',
+    'F:/BaiduNetdiskDownload/HoudiniChinese更新了词典.zip'))
+HFS = Path(os.environ.get('HFS', r'D:\DCC SoftWare\Houdini 21.0.440'))
+
 if PACKAGE.exists():
     shutil.rmtree(PACKAGE)
 spec = importlib.util.spec_from_file_location('metadata', ROOT/'tools/generate_engine_metadata.py')
 metadata = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(metadata)
-identity = metadata.generate(Path(r'D:\DCC SoftWare\Houdini 21.0.440'), '6.5.3', OUT/'obj')
+identity = metadata.generate(HFS, '6.5.3', OUT/'obj')
 identity['engine'] = 'HoudiniChineseEngine.dll'
 (OUT/'obj/engine.json').write_text(json.dumps(identity,indent=2)+'\n',encoding='utf-8')
 (OUT/'obj/detours').mkdir(parents=True,exist_ok=True)
 (PACKAGE/'HoudiniChinese/bin').mkdir(parents=True,exist_ok=True)
-with zipfile.ZipFile('F:/BaiduNetdiskDownload/HoudiniChinese更新了词典.zip') as archive:
-    for item in archive.infolist():
-        path = Path(item.filename)
-        if path.is_absolute() or '..' in path.parts or ':' in item.filename:
-            raise ValueError('Unsafe archive path')
-        if item.is_dir() or path.suffix.lower() not in ('.json','.py'):
-            continue
-        if item.filename in ('HoudiniChinese.json','HoudiniChinese/engine.json'):
-            continue
-        target = PACKAGE / item.filename.replace('python3.13libs/','python3.11libs/')
-        target.parent.mkdir(parents=True,exist_ok=True)
-        target.write_bytes(archive.read(item))
+
+
+def stage(relative: str, data: bytes) -> None:
+    path = Path(relative)
+    if path.is_absolute() or '..' in path.parts or ':' in relative:
+        raise ValueError('Unsafe archive path')
+    if path.suffix.lower() not in ('.json', '.py'):
+        return
+    if relative in ('HoudiniChinese.json', 'HoudiniChinese/engine.json'):
+        return
+    target = PACKAGE / relative.replace('python3.13libs/', 'python3.11libs/')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+
+
+if UPSTREAM.is_dir():
+    for file in sorted(UPSTREAM.rglob('*')):
+        if file.is_file():
+            stage(file.relative_to(UPSTREAM).as_posix(), file.read_bytes())
+elif UPSTREAM_ZIP.exists():
+    with zipfile.ZipFile(UPSTREAM_ZIP) as archive:
+        for item in archive.infolist():
+            if item.is_dir():
+                continue
+            stage(item.filename, archive.read(item))
+else:
+    raise SystemExit(
+        '缺少上游数据：既没有 %s，也找不到 %s\n'
+        '请把更新包解到 vendor/upstream，或用 HOUDINI_CHINESE_UPSTREAM_ZIP 指定。'
+        % (UPSTREAM, UPSTREAM_ZIP))
+
 # The source repository also contains older author dictionaries. Only add this
-# port's supplement; do not let old source data override the supplied update ZIP.
+# port's supplement; do not let old source data override the supplied update.
 for extra in ('dictionary_zz_houdini21_zh.json',
               'dictionary_shelf_help21_zh.json',
               'dictionary_zzz_fixes_zh.json',
