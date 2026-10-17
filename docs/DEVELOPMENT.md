@@ -16,6 +16,7 @@ docs/               文档；docs/archive/ 为历史记录
 
 ```bat
 build21.cmd             :: prepare21.py → 编译 loader/detours/引擎 → 打包
+deploy-engine21.cmd     :: 把新引擎装进现装包（需先完全退出 Houdini，自动备份）
 test21.cmd              :: Python 回归
 test-native21.cmd       :: 原生钩子回归
 build-installer21.cmd   :: Inno Setup 6 生成单文件安装器

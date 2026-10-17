@@ -35,7 +35,7 @@ DEFAULT_ZIP = r"D:\DCC SoftWare\Houdini 21.0.440\houdini\help\nodes.zip"
 STYLE = '<span style="color: #FFD700; font-weight: bold;">%s</span>'
 SUMMARY_LINE = re.compile(r"^\s*【.+】\s*$")
 # 参数描述行：缩进较深、大写开头、不是标题/标签
-DESCRIPTION = re.compile(r"^(\s{8,})([A-Z][^\s【].{7,})$")
+DESCRIPTION = re.compile(r"^(\s{4,})([A-Z][^\s【].{7,})$")
 MAX_FALLBACK_CHARS = 80
 
 
@@ -139,10 +139,16 @@ def lookup(description, summaries, dictionary):
 def process(text, summaries, dictionary, stats):
     lines = text.splitlines()
     output = []
+    in_parameters = False
     index = 0
     while index < len(lines):
         line = lines[index]
-        match = DESCRIPTION.match(line)
+        stripped = line.strip()
+        if stripped.startswith("@parameters"):
+            in_parameters = True
+        elif in_parameters and stripped.startswith("@"):
+            in_parameters = False
+        match = DESCRIPTION.match(line) if in_parameters else None
         if match and not (index > 0 and SUMMARY_LINE.match(lines[index - 1])):
             indent = match.group(1)
             description = match.group(2).strip()
@@ -166,6 +172,8 @@ def process(text, summaries, dictionary, stats):
                     cursor += 1
             if chinese:
                 output.append(indent + "【" + (STYLE % chinese) + "】")
+                # 空行让摘要单独成段，避免和英文挤在同一行
+                output.append("")
                 stats[source] = stats.get(source, 0) + 1
         output.append(line)
         index += 1

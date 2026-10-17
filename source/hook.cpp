@@ -446,6 +446,7 @@ void captureUntranslatedOnce();
 void redrawAllHoudiniWindows();
 void rememberQtWindow(QWindow *window);
 bool setHelpFooterChinese(bool chinese);
+bool setParameterHeaderChinese(bool chinese);
 
 bool isSupportedGuiHost() {
     wchar_t path[MAX_PATH] = {};
@@ -2844,6 +2845,7 @@ void toggleLanguage() {
     const bool enabled = !g_enabled.load(std::memory_order_acquire);
     g_enabled.store(enabled, std::memory_order_release);
     setHelpFooterChinese(enabled);
+    setParameterHeaderChinese(enabled);
     updateMenuButtonState();
     rebuildActiveHoudiniHelpTip();
     scheduleLanguageRefresh();
@@ -3806,6 +3808,82 @@ bool setHelpFooterChinese(bool chinese) {
     FlushInstructionCache(GetCurrentProcess(), g_helpFooterLiteral,
                           kHelpFooterBytes);
     g_helpFooterChinese = chinese;
+    return true;
+}
+
+// 参数提示头是 libPRM.dll 里的 "Parameter: %s" 格式串（全库唯一）。
+// 原位换成 "参数：%s"，切回英文时写回原文。
+namespace {
+constexpr size_t kParmHeaderBytes = 14; // "Parameter: %s" + NUL
+unsigned char *g_parmHeaderLiteral = nullptr;
+char g_parmHeaderOriginal[kParmHeaderBytes] = {};
+bool g_parmHeaderChinese = false;
+
+bool locateParmHeaderLiteral() {
+    if (g_parmHeaderLiteral)
+        return true;
+    HMODULE prm = GetModuleHandleW(L"libPRM.dll");
+    if (!prm)
+        return false;
+    const auto *base = reinterpret_cast<const unsigned char *>(prm);
+    const auto *dos = reinterpret_cast<const IMAGE_DOS_HEADER *>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+        return false;
+    const auto *nt =
+        reinterpret_cast<const IMAGE_NT_HEADERS *>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE)
+        return false;
+    static const char needle[] = "Parameter: %s";
+    const auto *section = IMAGE_FIRST_SECTION(nt);
+    const unsigned char *hit = nullptr;
+    size_t found = 0;
+    for (WORD index = 0; index < nt->FileHeader.NumberOfSections; ++index) {
+        const DWORD characteristics = section[index].Characteristics;
+        if ((characteristics & IMAGE_SCN_MEM_EXECUTE) ||
+            !(characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA))
+            continue;
+        const unsigned char *begin = base + section[index].VirtualAddress;
+        const size_t length = section[index].Misc.VirtualSize;
+        for (size_t offset = 0; offset + kParmHeaderBytes <= length; ++offset) {
+            if (begin[offset] != 'P' ||
+                std::memcmp(begin + offset, needle, kParmHeaderBytes - 1) != 0)
+                continue;
+            hit = begin + offset;
+            if (++found > 1)
+                return false;
+        }
+    }
+    if (!hit)
+        return false;
+    g_parmHeaderLiteral = const_cast<unsigned char *>(hit);
+    std::memcpy(g_parmHeaderOriginal, g_parmHeaderLiteral, kParmHeaderBytes);
+    hookLog("ParmHeader: literal at %p", static_cast<const void *>(hit));
+    return true;
+}
+} // namespace
+
+bool setParameterHeaderChinese(bool chinese) {
+    if (!locateParmHeaderLiteral())
+        return false;
+    if (g_parmHeaderChinese == chinese)
+        return true;
+    static const char kChinese[] = "参数：%s";
+    static_assert(sizeof(kChinese) <= kParmHeaderBytes, "header text too long");
+    DWORD previous = 0;
+    if (!VirtualProtect(g_parmHeaderLiteral, kParmHeaderBytes, PAGE_READWRITE,
+                        &previous))
+        return false;
+    if (chinese) {
+        std::memset(g_parmHeaderLiteral, 0, kParmHeaderBytes);
+        std::memcpy(g_parmHeaderLiteral, kChinese, sizeof(kChinese) - 1);
+    } else {
+        std::memcpy(g_parmHeaderLiteral, g_parmHeaderOriginal, kParmHeaderBytes);
+    }
+    DWORD ignored = 0;
+    VirtualProtect(g_parmHeaderLiteral, kParmHeaderBytes, previous, &ignored);
+    FlushInstructionCache(GetCurrentProcess(), g_parmHeaderLiteral,
+                          kParmHeaderBytes);
+    g_parmHeaderChinese = chinese;
     return true;
 }
 
@@ -6356,8 +6434,10 @@ void runOnGuiThread(QApplication *app) {
     installNativeShortcutEventFilter();
     installRuntimeHooks();
     // 页脚格式串在 libUI 加载后才能定位；英文模式保持原文。
-    if (g_enabled.load(std::memory_order_acquire))
+    if (g_enabled.load(std::memory_order_acquire)) {
         setHelpFooterChinese(true);
+        setParameterHeaderChinese(true);
+    }
     rememberCurrentImportModules();
     g_hookRegistryReady.store(true, std::memory_order_release);
     scheduleExistingQtQuickTextRefresh();

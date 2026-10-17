@@ -30,14 +30,15 @@ Houdini 的参数提示由帮助系统加载，用户偏好目录下的 `help/no
 `nodes.zip` 里的同名文件。本插件据此在每个参数描述上方插入一行中文摘要：
 
 ```
-Primitive Type:
-    【要创建的几何体类型】
-    Type of geometry to create.
+Parameter: sizex                 ← 头部（引擎补丁：参数：sizex）
+【盒子沿 X 轴的尺寸】              ← 中文摘要，单独成段
+Size of the box along the X axis. ← 英文原文保留
 ```
 
-- 覆盖 **1,020 / 4,729** 个节点，共约 9,700 条参数摘要
+- 覆盖 **2,787 / 4,729** 个节点，共约 **34,666** 条参数摘要
 - 未命中的节点保持英文，不会出现半截中文或错行
 - 标题与页脚由引擎钩子翻译（`Camera` → `相机`，`按 F1 查看帮助。`）
+- `Parameter: %s` 头部由引擎补丁替换为 `参数：%s`，切回英文自动恢复
 - 卸载：`python tools/build_help_overlay21.py --uninstall`，或删除
   `Documents\houdini21.0\help\nodes\`
 
