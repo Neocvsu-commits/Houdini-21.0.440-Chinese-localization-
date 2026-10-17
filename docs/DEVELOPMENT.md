@@ -27,6 +27,27 @@ python tools\package21.py
 help 覆盖层所需数据；`build21.cmd` 会自动调用它。上游数据已内置在 `vendor/upstream/`，
 克隆后无需外部更新包即可构建。
 
+## 从旧版本升级
+
+老克隆直接快进即可（远端历史没有改写）：
+
+```bat
+git pull
+git log --oneline -3          :: 确认到了最新提交
+set HFS=D:\你的路径\Houdini 21.0.440
+build21.cmd                   :: 引擎源码有改动，必须重新编译
+:: 完全退出 Houdini 后
+deploy-engine21.cmd
+python tools\build_help_overlay21.py --install --hfs "%HFS%"
+python tools\clear_help_cache21.py
+```
+
+如果老克隆有本地改动，先 `git stash`；冲突了就 `git fetch origin && git reset --hard origin/main`
+（会丢掉本地改动，确认过再执行）。
+
+升级后新增的内容：拼音搜索模块与数据、3 份 `zzz` 覆盖词典（含 417 条星空验证缺口）、
+`vendor/upstream` 自包含构建数据、`deploy-engine21.cmd`、覆盖层与缓存清理脚本。
+
 ## 在另一台机器复刻
 
 前置：**Houdini 21.0.440**（提供 SDK 头文件/库和 `nodes.zip`）、
